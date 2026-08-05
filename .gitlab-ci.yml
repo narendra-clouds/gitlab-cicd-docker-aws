@@ -1,0 +1,66 @@
+stages:
+  - build
+  - test
+  - dockerize
+  - deploy
+
+variables:
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  ECR_REPO: "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY_NAME"
+
+# ---------- BUILD ----------
+build:
+  stage: build
+  image: python:3.11-slim
+  script:
+    - pip install --no-cache-dir -r requirements.txt
+  artifacts:
+    paths:
+      - requirements.txt
+
+# ---------- TEST ----------
+test:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install --no-cache-dir -r requirements.txt
+    - pytest test_app.py -v
+
+# ---------- DOCKERIZE (build + push to ECR) ----------
+dockerize:
+  stage: dockerize
+  image: docker:24.0
+  services:
+    - docker:24.0-dind
+  before_script:
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  script:
+    - docker build -t $ECR_REPO:$IMAGE_TAG -t $ECR_REPO:latest .
+    - docker push $ECR_REPO:$IMAGE_TAG
+    - docker push $ECR_REPO:latest
+  only:
+    - main
+
+# ---------- DEPLOY (SSH into EC2 and run new container) ----------
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client aws-cli
+    - eval $(ssh-agent -s)
+    - echo "$EC2_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+  script:
+    - >
+      ssh $EC2_USER@$EC2_HOST "
+      aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com &&
+      docker pull $ECR_REPO:latest &&
+      docker stop flask-app || true &&
+      docker rm flask-app || true &&
+      docker run -d --name flask-app -p 80:5000 --restart unless-stopped $ECR_REPO:latest
+      "
+  only:
+    - main
