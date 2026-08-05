@@ -33,7 +33,8 @@ dockerize:
   services:
     - docker:24.0-dind
   before_script:
-    - apk add --no-cache aws-cli
+    - apk add --no-cache python3 py3-pip
+    - pip install --no-cache-dir awscli --break-system-packages
     - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
   script:
     - docker build -t $ECR_REPO:$IMAGE_TAG -t $ECR_REPO:latest .
@@ -47,7 +48,8 @@ deploy:
   stage: deploy
   image: alpine:latest
   before_script:
-    - apk add --no-cache openssh-client aws-cli
+    - apk add --no-cache openssh-client python3 py3-pip
+    - pip install --no-cache-dir awscli --break-system-packages
     - eval $(ssh-agent -s)
     - echo "$EC2_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
     - mkdir -p ~/.ssh
