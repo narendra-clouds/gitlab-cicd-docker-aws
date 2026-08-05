@@ -7,7 +7,7 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return jsonify({
-        "message": "Hello from Narendra's DevOps Pipeline!",
+        "message": "Hello from Narendra's DevOps Pipeline! 🚀",
         "hostname": socket.gethostname(),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     })
