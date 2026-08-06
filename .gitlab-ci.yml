@@ -8,7 +8,6 @@ variables:
   IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
   ECR_REPO: "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY_NAME"
 
-# ---------- BUILD ----------
 build:
   stage: build
   image: python:3.11-slim
@@ -18,7 +17,6 @@ build:
     paths:
       - requirements.txt
 
-# ---------- TEST ----------
 test:
   stage: test
   image: python:3.11-slim
@@ -26,7 +24,6 @@ test:
     - pip install --no-cache-dir -r requirements.txt
     - pytest test_app.py -v
 
-# ---------- DOCKERIZE (build + push to ECR) ----------
 dockerize:
   stage: dockerize
   image: python:3.11-slim
@@ -36,7 +33,10 @@ dockerize:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends docker.io
+    - apt-get update -qq && apt-get install -y --no-install-recommends curl
+    - curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.9.tgz -o docker.tgz
+    - tar xzf docker.tgz
+    - mv docker/docker /usr/local/bin/docker
     - pip install --no-cache-dir awscli
     - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
   script:
@@ -46,7 +46,6 @@ dockerize:
   only:
     - main
 
-# ---------- DEPLOY (SSH into EC2 and run new container) ----------
 deploy:
   stage: deploy
   image: alpine:latest
